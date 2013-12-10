@@ -8,7 +8,7 @@ define python::venv::isolate($ensure=present,
 
   if $ensure == 'present' {
     # Parent directory of root directory. /var/www for /var/www/blog
-    $root_parent = inline_template("<%= root.match(%r!(.+)/.+!)[1] %>")
+    $root_parent = inline_template("<%= @root.match(%r!(.+)/.+!)[1] %>")
 
     if !defined(File[$root_parent]) {
       file { $root_parent:
@@ -36,7 +36,7 @@ define python::venv::isolate($ensure=present,
     # Some newer Python packages require an updated distribute
     # from the one that is in repos on most systems:
     exec { "update distribute and pip in $root":
-      command => "$root/bin/pip install -U distribute pip",
+      command => "$root/bin/pip install -U pip distribute",
       refreshonly => true,
     }
 

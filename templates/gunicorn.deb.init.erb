@@ -25,16 +25,31 @@ CHOWN=""
 <% else %>
 CHOWN="-c<%= owner %>:<%= group %>"
 <% end %>
-SOCKET=<%= socket %>
+SOCKET=<%= real_socket %>
 RUNDIR=<%= rundir %>
 PIDFILE=<%= pidfile %>
 LOGFILE=<%= logfile %>
 WORKERS=<%= workers %>
 TIMEOUT=<%= timeout_seconds %>
 MODULE=<%= django ? django_settings : (paste ? paste_settings : wsgi_module) %>
+<% if django %>
+PYTHONPATH_PARAM="--pythonpath $SRC"
+<% else %>
+PYTHONPATH_PARAM=""
+<% end %>
+<% if conffile == '' %>
+CONFFILE=""
+<% else %>
+CONFFILE="-c <%= conffile %>"
+<% end %>
 
-DAEMON_OPTS="-b $SOCKET -p $PIDFILE --log-file $LOGFILE \
---workers $WORKERS -t $TIMEOUT --daemon --name $NAME $MODULE"
+if [ -f "/etc/default/$NAME" ]; then
+	. /etc/default/$NAME
+fi
+
+DAEMON_OPTS="$CONFFILE -b $SOCKET -p $PIDFILE --log-file $LOGFILE \
+--workers $WORKERS -t $TIMEOUT --pythonpath=$SRC --daemon --name $NAME \
+$PYTHONPATH_PARAM $MODULE"
 
 test -x $DAEMON || exit 0
 
@@ -51,28 +66,28 @@ fi
 
 case "$1" in
   start)
-    echo -n "Starting $DESC: "
+    log_daemon_msg "Starting $DESC" $NAME
     start-stop-daemon -S $CHOWN -q -p $PIDFILE -d $SRC \
       -x $DAEMON -- $DAEMON_OPTS || true
-    echo "$NAME."
+    log_end_msg $?
 	;;
   stop)
-    echo -n "Stopping $DESC: "
+    log_daemon_msg "Stopping $DESC" $NAME
     start-stop-daemon -K -q -p $PIDFILE -s QUIT || true
-    echo "$NAME."
+    log_end_msg $?
 	;;
   restart)
-    echo -n "Restarting $DESC: "
+    log_daemon_msg "Restarting $DESC" $NAME
     start-stop-daemon -K -q -p $PIDFILE -s QUIT || true
     sleep 1
     start-stop-daemon -S $CHOWN -q -p $PIDFILE -d $SRC \
       -x $DAEMON -- $DAEMON_OPTS || true
-    echo "$NAME."
+    log_end_msg $?
 	;;
   reload)
-    echo -n "Reloading $DESC: "
+    log_daemon_msg "Reloading $DESC" $NAME
     start-stop-daemon -K -q -p $PIDFILE -s HUP || true
-    echo "$NAME."
+    log_end_msg $?
 	;;
   status)
     status_of_proc -p $PIDFILE "$DAEMON" $NAME && exit 0 || exit $?

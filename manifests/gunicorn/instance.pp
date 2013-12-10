@@ -8,7 +8,10 @@ define python::gunicorn::instance($venv,
                                   $paste_settings="",
                                   $version=undef,
                                   $workers=1,
-                                  $timeout_seconds=30) {
+                                  $timeout_seconds=30,
+                                  $conffile="",
+                                  $socket=undef,
+                                  $environment={}) {
   $is_present = $ensure == "present"
 
   $rundir = $python::gunicorn::rundir
@@ -17,8 +20,12 @@ define python::gunicorn::instance($venv,
   $group = $python::gunicorn::group
 
   $initscript = "/etc/init.d/gunicorn-${name}"
+  $defaultsfile = "/etc/default/gunicorn-${name}"
   $pidfile = "$rundir/$name.pid"
-  $socket = "unix:$rundir/$name.sock"
+  $real_socket = $socket ? {
+    undef   => "unix:${rundir}/${name}.sock",
+    default => $socket,
+  }
   $logfile = "$logdir/$name.log"
 
   if $wsgi_module == "" and !($django or $paste) {
@@ -44,8 +51,7 @@ define python::gunicorn::instance($venv,
 
   if $is_present {
     python::pip::install {
-      "$gunicorn_package in $venv":
-        package => $gunicorn_package,
+      "$gunicorn_package":
         ensure => $ensure,
         venv => $venv,
         owner => $owner,
@@ -54,8 +60,7 @@ define python::gunicorn::instance($venv,
         before => File[$initscript];
 
       # for --name support in gunicorn:
-      "setproctitle in $venv":
-        package => "setproctitle",
+      "setproctitle":
         ensure => $ensure,
         venv => $venv,
         owner => $owner,
@@ -77,6 +82,11 @@ define python::gunicorn::instance($venv,
     require => File["/etc/logrotate.d/gunicorn-${name}"],
   }
 
+  file { $defaultsfile:
+    ensure => $ensure,
+    content => template("python/gunicorn.default.erb")
+  }
+
   file { "/etc/logrotate.d/gunicorn-${name}":
     ensure => $ensure,
     content => template("python/gunicorn.logrotate.erb"),
@@ -88,15 +98,15 @@ define python::gunicorn::instance($venv,
     hasstatus => $is_present,
     hasrestart => $is_present,
     subscribe => $ensure ? {
-      'present' => File[$initscript],
+      'present' => [File[$initscript], File[$defaultsfile]],
       default => undef,
     },
     require => $ensure ? {
-      'present' => File[$initscript],
+      'present' => [File[$initscript], File[$defaultsfile]],
       default => undef,
     },
     before => $ensure ? {
-      'absent' => File[$initscript],
+      'absent' => [File[$initscript], File[$defaultsfile]],
       default => undef,
     },
   }
